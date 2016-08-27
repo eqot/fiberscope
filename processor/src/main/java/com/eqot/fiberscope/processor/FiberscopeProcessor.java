@@ -1,10 +1,13 @@
 package com.eqot.fiberscope.processor;
 
+import com.google.auto.service.AutoService;
+
 import java.io.IOException;
 import java.io.Writer;
 import java.util.Set;
 
 import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.annotation.processing.SupportedSourceVersion;
@@ -13,6 +16,7 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 import javax.tools.JavaFileObject;
 
+@AutoService(Processor.class)
 @SupportedAnnotationTypes("com.eqot.fiberscope.processor.Accessible")
 @SupportedSourceVersion(SourceVersion.RELEASE_7)
 public class FiberscopeProcessor extends AbstractProcessor {
