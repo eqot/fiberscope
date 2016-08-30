@@ -69,11 +69,8 @@ public class FiberscopeProcessor extends AbstractProcessor {
     private void processClass(Element klass) {
         final String packageName = processingEnv.getElementUtils().getPackageOf(klass).getQualifiedName().toString();
         final ClassName className = ClassName.get(packageName, klass.getSimpleName().toString());
-
         final ClassName newClass = ClassName.get(
                 packageName, klass.getSimpleName().toString() + "Fiberscope2");
-
-//        final String className = klass.getSimpleName().toString();
 
         TypeSpec.Builder classBuilder = TypeSpec.classBuilder(newClass.simpleName())
                 .addModifiers(Modifier.PUBLIC);
