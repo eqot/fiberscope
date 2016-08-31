@@ -12,7 +12,6 @@ import java.lang.reflect.Method;
 import java.util.Set;
 
 import javax.annotation.processing.AbstractProcessor;
-import javax.annotation.processing.Messager;
 import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
@@ -29,38 +28,8 @@ import javax.tools.JavaFileObject;
 public class FiberscopeProcessor extends AbstractProcessor {
     @Override
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnv) {
-        StringBuilder builder = new StringBuilder()
-                .append("package com.stablekernel.annotationprocessor.generated;\n\n")
-                .append("public class GeneratedClass {\n\n") // open class
-                .append("\tpublic String getMessage() {\n") // open method
-                .append("\t\treturn \"");
-
         for (Element element : roundEnv.getElementsAnnotatedWith(Fiberscope.class)) {
-            String objectType = element.getSimpleName().toString();
-
-            final Messager messager = processingEnv.getMessager();
-
             processClass(element);
-
-//            final Accessible accessible = element.getAnnotation(Accessible.class);
-//            final String target = accessible.value();
-//            messager.printMessage(Diagnostic.Kind.NOTE, target);
-
-            builder.append(objectType).append(" says hello!\\n");
-        }
-
-        builder.append("\";\n") // end return
-                .append("\t}\n") // close method
-                .append("}\n"); // close class
-
-        try {
-            JavaFileObject source = processingEnv.getFiler().createSourceFile("com.stablekernel.annotationprocessor.generated.GeneratedClass");
-
-            Writer writer = source.openWriter();
-            writer.write(builder.toString());
-            writer.flush();
-            writer.close();
-        } catch (IOException e) {
         }
 
         return true;
