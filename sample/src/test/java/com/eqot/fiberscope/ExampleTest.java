@@ -8,7 +8,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
-@Fiberscope(value = Example.class, methods = { "add", "sub" })
+@Fiberscope(Example.class)
 public class ExampleTest {
     @Before
     public void setUp() throws Exception {

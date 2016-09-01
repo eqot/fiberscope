@@ -10,5 +10,4 @@ import static java.lang.annotation.RetentionPolicy.SOURCE;
 @Target(TYPE)
 public @interface Fiberscope {
     Class<?> value() default Object.class;
-    String[] methods() default {};
 }
