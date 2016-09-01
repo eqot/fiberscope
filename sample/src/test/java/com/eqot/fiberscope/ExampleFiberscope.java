@@ -1,6 +1,5 @@
 package com.eqot.fiberscope;
 
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 public class ExampleFiberscope {
@@ -23,9 +22,18 @@ public class ExampleFiberscope {
         int result = 0;
         try {
             result = (int) mMethodAdd.invoke(mInstance, value1, value2);
-        } catch (IllegalAccessException e) {
+        } catch (Exception e) {
             e.printStackTrace();
-        } catch (InvocationTargetException e) {
+        }
+
+        return result;
+    }
+
+    public Object add(Object... args) {
+        Object result = null;
+        try {
+            result = mMethodAdd.invoke(mInstance, args);
+        } catch (Exception e) {
             e.printStackTrace();
         }
 

@@ -9,6 +9,9 @@ import com.squareup.javapoet.TypeSpec;
 import java.io.IOException;
 import java.io.Writer;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 import javax.annotation.processing.AbstractProcessor;
@@ -20,87 +23,190 @@ import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.MirroredTypeException;
+import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 
 @AutoService(Processor.class)
-@SupportedAnnotationTypes({"com.eqot.fiberscope.processor.Fiberscope", "com.eqot.fiberscope.processor.Accessible"})
+@SupportedAnnotationTypes({
+        "com.eqot.fiberscope.processor.Fiberscope",
+        "com.eqot.fiberscope.processor.Accessible"})
 @SupportedSourceVersion(SourceVersion.RELEASE_7)
 public class FiberscopeProcessor extends AbstractProcessor {
+
+    private class ParameterDef {
+        final Class<?> type;
+        final String name;
+
+        ParameterDef(Parameter parameter) {
+            type = parameter.getType();
+            name = parameter.getName();
+        }
+    }
+
+    private class MethodDef {
+        final String name;
+        final Class<?> returnType;
+        final List<ParameterDef> parameters = new ArrayList<>();
+
+        MethodDef(Method method) {
+            name = method.getName();
+            returnType = method.getReturnType();
+
+            for (Parameter parameter : method.getParameters()) {
+                ParameterDef parameterDef = new ParameterDef(parameter);
+                parameters.add(parameterDef);
+            }
+        }
+    }
+
+    private class ClassDef {
+        final String name;
+        final List<MethodDef> methods = new ArrayList<>();
+
+        ClassDef(String className) {
+            name = className;
+
+            Class clazz = null;
+            try {
+                clazz = Class.forName(name);
+            } catch (ClassNotFoundException e) {
+                e.printStackTrace();
+            }
+            if (clazz == null) {
+                return;
+            }
+
+            for (Method method : clazz.getDeclaredMethods()) {
+                MethodDef methodDef = new MethodDef(method);
+                methods.add(methodDef);
+            }
+        }
+    }
+
     @Override
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnv) {
         for (Element element : roundEnv.getElementsAnnotatedWith(Fiberscope.class)) {
-            processClass(element);
+            processElement(element);
         }
 
         return true;
     }
 
-    private void processClass(Element klass) {
-        final String packageName = processingEnv.getElementUtils().getPackageOf(klass).getQualifiedName().toString();
-        final ClassName className = ClassName.get(packageName, klass.getSimpleName().toString());
-        final ClassName newClass = ClassName.get(
-                packageName, klass.getSimpleName().toString() + "Fiberscope2");
+    private void processElement(Element element) {
+        final Fiberscope fiberscope = element.getAnnotation(Fiberscope.class);
+        if (fiberscope == null) {
+            return;
+        }
 
-        TypeSpec.Builder classBuilder = TypeSpec.classBuilder(newClass.simpleName())
+        String className = "";
+        try {
+            fiberscope.value();
+        } catch (MirroredTypeException mte) {
+            className = mte.getTypeMirror().toString();
+        }
+        if (className.equals("") || className.equals("java.lang.Object")) {
+            return;
+        }
+
+        generateCode(className);
+    }
+
+    private void generateCode(String target) {
+        final String[] words = target.split("\\.");
+        String packageName = "";
+        String className = "";
+        for (int i = 0, l = words.length; i < l; i++) {
+            if (i < l - 1) {
+                if (i != 0) {
+                    packageName += ".";
+                }
+                packageName += words[i];
+            } else {
+                className = words[i];
+            }
+        }
+
+        final ClassName targetClass = ClassName.get(packageName, className);
+        final ClassName generatedClass = ClassName.get(packageName, className + "$Fiberscope");
+
+        final ClassDef classDef = new ClassDef(target);
+
+        final TypeSpec.Builder classBuilder = TypeSpec.classBuilder(generatedClass.simpleName())
                 .addModifiers(Modifier.PUBLIC);
 
         classBuilder
-                .addField(className, "mInstance", Modifier.PRIVATE, Modifier.FINAL);
+                .addField(targetClass, "mInstance", Modifier.PRIVATE, Modifier.FINAL);
 
-        MethodSpec.Builder constructorBuilder = MethodSpec.constructorBuilder()
+        final MethodSpec.Builder constructorBuilder = MethodSpec.constructorBuilder()
                 .addModifiers(Modifier.PUBLIC)
-                .addStatement("mInstance = new $T()", className);
+                .addStatement("mInstance = new $T()", targetClass);
 
-        for (Element element : klass.getEnclosedElements()) {
-            if (element.getAnnotation(Accessible.class) == null) {
-                continue;
+        for (MethodDef methodDef : classDef.methods) {
+            String combinedMethodName = "_" + methodDef.name;
+            String argTypes = "";
+            String argNames = "";
+            for (ParameterDef parameterDef : methodDef.parameters) {
+                combinedMethodName += "_" + parameterDef.type.getName();
+
+                if (!argTypes.equals("")) {
+                    argTypes += ", ";
+                    argNames += ", ";
+                }
+                argTypes += parameterDef.type.getName() + ".class";
+                argNames += parameterDef.name;
             }
-
-            final String methodName = element.getSimpleName().toString();
 
             constructorBuilder
                     .beginControlFlow("try")
-                    .addStatement("$N = $T.class.getDeclaredMethod($S, int.class, int.class)",
-                            "_" + methodName, className, methodName)
-                    .addStatement("$N.setAccessible(true)", "_" + methodName)
+                    .addStatement("$N = $T.class.getDeclaredMethod($S, $N)",
+                            combinedMethodName, targetClass, methodDef.name, argTypes)
+                    .addStatement("$N.setAccessible(true)", combinedMethodName)
                     .endControlFlow("catch (Exception e) {}");
 
-            MethodSpec methodSpec = MethodSpec.methodBuilder(methodName)
+            MethodSpec.Builder methodSpecBuilder = MethodSpec.methodBuilder(methodDef.name)
                     .addModifiers(Modifier.PUBLIC)
-                    .returns(int.class)
-                    .addParameter(int.class, "value1")
-                    .addParameter(int.class, "value2")
-                    .addStatement("int result = 0")
+                    .returns(methodDef.returnType);
+
+            for (ParameterDef parameterDef : methodDef.parameters) {
+                methodSpecBuilder
+                        .addParameter(parameterDef.type, parameterDef.name);
+            }
+
+            methodSpecBuilder
+                    .addStatement("$N result = 0", methodDef.returnType.getName())
                     .beginControlFlow("try")
-                    .addStatement("result = (int) $N.invoke(mInstance, value1, value2)",
-                            "_" + methodName)
+                    .addStatement("result = ($N) $N.invoke(mInstance, $N)",
+                            methodDef.returnType.getName(), combinedMethodName, argNames)
                     .endControlFlow("catch (Exception e) {}")
                     .addStatement("return result")
                     .build();
 
             classBuilder
-                    .addField(Method.class, "_" + methodName, Modifier.PRIVATE)
-                    .addMethod(methodSpec);
+                    .addField(Method.class, combinedMethodName, Modifier.PRIVATE)
+                    .addMethod(methodSpecBuilder.build());
         }
 
         classBuilder
                 .addMethod(constructorBuilder.build());
 
-        TypeSpec classSpec = classBuilder.build();
-
         try {
-            JavaFileObject source = processingEnv.getFiler().createSourceFile(newClass.toString());
+            JavaFileObject source = processingEnv.getFiler().createSourceFile(generatedClass.toString());
             Writer writer = source.openWriter();
 
-            JavaFile.builder(packageName, classSpec)
-                .build()
-                .writeTo(writer);
-//                .writeTo(System.out);
+            JavaFile.builder(packageName, classBuilder.build())
+                    .build()
+                    .writeTo(writer);
+//                    .writeTo(System.out);
 
             writer.flush();
             writer.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private void log(String message) {
+        processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, message);
     }
 }
