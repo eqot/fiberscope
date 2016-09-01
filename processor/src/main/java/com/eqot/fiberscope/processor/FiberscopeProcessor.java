@@ -61,15 +61,32 @@ public class FiberscopeProcessor extends AbstractProcessor {
     }
 
     private class ClassDef {
-        final String name;
+//        final String name;
+
+        final String packageName;
+        final String className;
         final List<MethodDef> methods = new ArrayList<>();
 
-        ClassDef(String className) {
-            name = className;
+        ClassDef(String target) {
+            final String[] words = target.split("\\.");
+            String tmpPackageName = "";
+            String tmpClassName = "";
+            for (int i = 0, l = words.length; i < l; i++) {
+                if (i < l - 1) {
+                    if (i != 0) {
+                        tmpPackageName += ".";
+                    }
+                    tmpPackageName += words[i];
+                } else {
+                    tmpClassName = words[i];
+                }
+            }
+            packageName = tmpPackageName;
+            className = tmpClassName;
 
             Class clazz = null;
             try {
-                clazz = Class.forName(name);
+                clazz = Class.forName(target);
             } catch (ClassNotFoundException e) {
                 e.printStackTrace();
             }
@@ -113,24 +130,11 @@ public class FiberscopeProcessor extends AbstractProcessor {
     }
 
     private void generateCode(String target) {
-        final String[] words = target.split("\\.");
-        String packageName = "";
-        String className = "";
-        for (int i = 0, l = words.length; i < l; i++) {
-            if (i < l - 1) {
-                if (i != 0) {
-                    packageName += ".";
-                }
-                packageName += words[i];
-            } else {
-                className = words[i];
-            }
-        }
-
-        final ClassName targetClass = ClassName.get(packageName, className);
-        final ClassName generatedClass = ClassName.get(packageName, className + "$Fiberscope");
-
         final ClassDef classDef = new ClassDef(target);
+
+        final ClassName targetClass = ClassName.get(classDef.packageName, classDef.className);
+        final ClassName generatedClass = ClassName.get(
+                classDef.packageName, classDef.className + "$Fiberscope");
 
         final TypeSpec.Builder classBuilder = TypeSpec.classBuilder(generatedClass.simpleName())
                 .addModifiers(Modifier.PUBLIC);
@@ -194,7 +198,7 @@ public class FiberscopeProcessor extends AbstractProcessor {
             JavaFileObject source = processingEnv.getFiler().createSourceFile(generatedClass.toString());
             Writer writer = source.openWriter();
 
-            JavaFile.builder(packageName, classBuilder.build())
+            JavaFile.builder(classDef.packageName, classBuilder.build())
                     .build()
                     .writeTo(writer);
 //                    .writeTo(System.out);
